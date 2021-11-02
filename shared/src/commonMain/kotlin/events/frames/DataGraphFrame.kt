@@ -44,8 +44,8 @@ class DataGraphFrame(override val structure: DataGraph) : Frame<NodeInstance, Ed
 
     fun <T : DataGraphElement> changeElement(
         element: T,
-        propertiesToAdd: List<PropertyInstance>,
-        propertiesToRemove: List<PropertyInstance>
+        propertiesToAdd: List<PropertyInstance> = listOf(),
+        propertiesToRemove: List<PropertyInstance> = listOf()
     ) {
         val event = eventMaker.makeChangeEvent(element, propertiesToAdd, propertiesToRemove)
         eventLine.addAndApply(event)

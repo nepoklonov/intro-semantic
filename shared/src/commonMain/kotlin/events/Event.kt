@@ -42,7 +42,7 @@ data class EventPair<O : Event, R : Event>(
 class Mutation(
     val events: List<Event>,
 ) {
-    private val atomicEvents
+    val atomicEvents
         get() = events.mapNotNull {
             when (it) {
                 is CompositeEvent -> it.atomicEvents
