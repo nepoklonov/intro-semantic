@@ -1,0 +1,169 @@
+{
+  "fundamental": {
+    "nodeClasses": [
+      {
+        "label": "Человек",
+        "properties": [
+          "pr1",
+          "pr2",
+          "pr3"
+        ]
+      },
+      {
+        "label": "Организация",
+        "properties": [
+          "pr4",
+          "pr5",
+          "pr6"
+        ]
+      },
+      {
+        "label": "Имущество",
+        "properties": [
+          "pr7",
+          "pr8"
+        ]
+      }
+    ],
+    "edgeClasses": [
+      {
+        "label": "Владеет",
+        "properties": [
+          "pr9"
+        ]
+      },
+      {
+        "label": "Работает",
+        "properties": []
+      },
+      {
+        "label": "Дружит",
+        "properties": []
+      }
+    ],
+    "propertyClasses": [
+      {
+        "label": "ФИО",
+        "dataType": "String"
+      },
+      {
+        "label": "Полное наименование",
+        "dataType": "String"
+      },
+      {
+        "label": "Возраст",
+        "dataType": "Int"
+      },
+      {
+        "label": "Контактные данные",
+        "dataType": "String"
+      },
+      {
+        "label": "Стоимость в рублях",
+        "dataType": "Int"
+      },
+      {
+        "label": "Описание",
+        "dataType": "String"
+      },
+      {
+        "label": "Дата начала владения",
+        "dataType": "Date"
+      }
+    ]
+  },
+  "model": {
+    "modelNodes": [
+      {
+        "id": "mn1",
+        "elementClass": "Человек"
+      },
+      {
+        "id": "mn2",
+        "elementClass": "Организация"
+      },
+      {
+        "id": "mn3",
+        "elementClass": "Имущество"
+      }
+    ],
+    "edgeRelations": [
+      {
+        "source": "mn1",
+        "target": "mn1",
+        "elementClass": "Дружит"
+      },
+      {
+        "source": "mn1",
+        "target": "mn2",
+        "elementClass": "Работает"
+      },
+      {
+        "source": "mn1",
+        "target": "mn3",
+        "elementClass": "Владеет"
+      },
+      {
+        "source": "mn2",
+        "target": "mn3",
+        "elementClass": "Владеет"
+      }
+    ],
+    "propertyRelations": [
+      {
+        "id": "pr1",
+        "elementClass": "ФИО",
+        "holderElementClass": "Человек",
+        "isImportant": true
+      },
+      {
+        "id": "pr2",
+        "elementClass": "Возраст",
+        "holderElementClass": "Человек",
+        "isImportant": false
+      },
+      {
+        "id": "pr3",
+        "elementClass": "Контактные данные",
+        "holderElementClass": "Человек",
+        "isImportant": false
+      },
+      {
+        "id": "pr4",
+        "elementClass": "Полное наименование",
+        "holderElementClass": "Организация",
+        "isImportant": true
+      },
+      {
+        "id": "pr5",
+        "elementClass": "Контактные данные",
+        "holderElementClass": "Организация",
+        "isImportant": false
+      },
+      {
+        "id": "pr6",
+        "elementClass": "Возраст",
+        "holderElementClass": "Организация",
+        "isImportant": false
+      },
+      {
+        "id": "pr7",
+        "elementClass": "Описание",
+        "holderElementClass": "Имущество",
+        "isImportant": false
+      },
+      {
+        "id": "pr8",
+        "elementClass": "Стоимость в рублях",
+        "holderElementClass": "Имущество",
+        "isImportant": false
+      },
+      {
+        "id": "pr9",
+        "elementClass": "Дата начала владения",
+        "holderElementClass": "Владеет",
+        "isImportant": false
+      }
+    ]
+  }
+}
