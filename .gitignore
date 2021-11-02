@@ -1,0 +1,20 @@
+# Intellij
+.idea/
+*.iml
+*.iws
+!.idea/runConfigurations
+!.idea/runConfigurations/*
+
+# Maven
+log/
+target/
+
+#Gradle
+.gradle
+
+#Other
+build
+node_modules
+src/jsMain/web
+package.json
+local.properties
