@@ -40,21 +40,38 @@ data class EventPair<O : Event, R : Event>(
 
 //TODO keep it optimized
 class Mutation(
-    val events: List<Event>,
+    events: List<Event>
 ) {
-    val atomicEvents
-        get() = events.mapNotNull {
+    private val optimizedEvents = HashMap<String, AtomicEvent>()
+
+    init {
+        events.mapNotNull {
             when (it) {
                 is CompositeEvent -> it.atomicEvents
                 is AtomicEvent -> listOf(it)
                 else -> null
             }
-        }.flatten()
+        }.flatten().forEach {
+            when (optimizedEvents.containsKey(it.elementKey)) {
+                false -> optimizedEvents[it.elementKey] = it
+                else -> when (optimizedEvents[it.elementKey]) {
+                    is AddEvent<*, *> -> when (it) {
+                        is RemoveEvent -> optimizedEvents.remove(it.elementKey)
+                    }
+                    is ChangeEvent -> optimizedEvents[it.elementKey] = it
+                }
+            }
+        }
+    }
 
-    val addEvents = atomicEvents.filterIsInstance<AddEvent<*, *>>()
-    val removeEvents = atomicEvents.filterIsInstance<RemoveEvent>()
-    val changeEvents = atomicEvents.filterIsInstance<ChangeEvent>()
-    val reverseEdgeEvents = atomicEvents.filterIsInstance<ReverseEdgeEvent>()
+
+    val atomicEvents
+        get() = optimizedEvents.values.toList()
+
+    val addEvents = events.filterIsInstance<AddEvent<*, *>>()
+    val removeEvents = events.filterIsInstance<RemoveEvent>()
+    val changeEvents = events.filterIsInstance<ChangeEvent>()
+    val reverseEdgeEvents = events.filterIsInstance<ReverseEdgeEvent>()
 
 }
 
