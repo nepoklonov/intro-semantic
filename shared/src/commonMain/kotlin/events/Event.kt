@@ -68,10 +68,10 @@ class Mutation(
     val atomicEvents
         get() = optimizedEvents.values.toList()
 
-    val addEvents = events.filterIsInstance<AddEvent<*, *>>()
-    val removeEvents = events.filterIsInstance<RemoveEvent>()
-    val changeEvents = events.filterIsInstance<ChangeEvent>()
-    val reverseEdgeEvents = events.filterIsInstance<ReverseEdgeEvent>()
+    val addEvents = atomicEvents.filterIsInstance<AddEvent<*, *>>()
+    val removeEvents = atomicEvents.filterIsInstance<RemoveEvent>()
+    val changeEvents = atomicEvents.filterIsInstance<ChangeEvent>()
+    val reverseEdgeEvents = atomicEvents.filterIsInstance<ReverseEdgeEvent>()
 
 }
 
