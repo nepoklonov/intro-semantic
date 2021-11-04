@@ -64,8 +64,8 @@ class Mutation(mixedEvents: List<Event>) {
                                     @Suppress("UNCHECKED_CAST")
                                     val addNodeEvent = oldEvent as AddEvent<NodeInstance, NodeInstanceDto>
 
-                                    val newProperties = addNodeEvent.dto.properties.filter { (property) ->
-                                        !changeEvent.propertyChanges.propertyKeysToRemove.contains(property)// TODO check by key
+                                    val newProperties = addNodeEvent.dto.properties.filter { property ->
+                                        !changeEvent.propertyChanges.propertyKeysToRemove.contains(property.key)
                                     }.union(changeEvent.propertyChanges.propertiesToAdd).toSet()
 
                                     val newAddNodeEvent = AddEvent<NodeInstance, NodeInstanceDto>(
@@ -85,8 +85,8 @@ class Mutation(mixedEvents: List<Event>) {
                                     @Suppress("UNCHECKED_CAST")
                                     val addEdgeEvent = oldEvent as AddEvent<EdgeInstance, EdgeInstanceDto>
 
-                                    val newProperties = addEdgeEvent.dto.properties.filter { (property) ->
-                                        !changeEvent.propertyChanges.propertyKeysToRemove.contains(property)// TODO check by key
+                                    val newProperties = addEdgeEvent.dto.properties.filter { property ->
+                                        !changeEvent.propertyChanges.propertyKeysToRemove.contains(property.key)
                                     }.union(changeEvent.propertyChanges.propertiesToAdd).toSet()
 
                                     val newAddEdgeEvent = AddEvent<NodeInstance, NodeInstanceDto>(
