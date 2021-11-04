@@ -13,6 +13,8 @@ import elements.schema.fundamental.PropertyClass
 import elements.schema.model.EdgeRelation
 import elements.schema.model.ModelNode
 import elements.schema.model.PropertyRelation
+import events.ElementForm.*
+import kotlinx.serialization.Serializable
 
 interface Event
 
@@ -39,52 +41,99 @@ data class EventPair<O : Event, R : Event>(
 )
 
 //TODO keep it optimized
-class Mutation(
-    events: List<Event>
-) {
-    private val optimizedEvents = HashMap<String, AtomicEvent>()
+class Mutation(mixedEvents: List<Event>) {
+    private val optimizedEvents = mutableMapOf<String, AtomicEvent>()
 
     init {
-        events.mapNotNull {
+        mixedEvents.mapNotNull {
             when (it) {
                 is CompositeEvent -> it.atomicEvents
                 is AtomicEvent -> listOf(it)
                 else -> null
             }
         }.flatten().forEach {
-            when (optimizedEvents.containsKey(it.elementKey)) {
-                false -> optimizedEvents[it.elementKey] = it
-                else -> when (optimizedEvents[it.elementKey]) {
+            if (optimizedEvents.containsKey(it.elementKey)) {
+                when (val oldEvent = optimizedEvents[it.elementKey]) {
                     is AddEvent<*, *> -> when (it) {
                         is RemoveEvent -> optimizedEvents.remove(it.elementKey)
+                        is ChangeEvent -> {
+                            val changeEvent = it as ChangeDataElementEvent
+                            when (oldEvent.elementForm) {
+                                NODE -> {
+                                    // Mutation works only with DataGraph Events, so cast is safe
+                                    @Suppress("UNCHECKED_CAST")
+                                    val addNodeEvent = oldEvent as AddEvent<NodeInstance, NodeInstanceDto>
+
+                                    val newProperties = addNodeEvent.dto.properties.filter { (property) ->
+                                        !changeEvent.propertyChanges.propertyKeysToRemove.contains(property)// TODO check by key
+                                    }.union(changeEvent.propertyChanges.propertiesToAdd).toSet()
+
+                                    val newAddNodeEvent = AddEvent<NodeInstance, NodeInstanceDto>(
+                                        elementKey = addNodeEvent.elementKey,
+                                        elementForm = addNodeEvent.elementForm,
+                                        dto = NodeInstanceDto(
+                                            id = addNodeEvent.dto.id,
+                                            label = addNodeEvent.dto.label,
+                                            properties = newProperties
+                                        )
+                                    )
+
+                                    optimizedEvents[it.elementKey] = newAddNodeEvent
+                                }
+                                EDGE -> {
+                                    // Mutation works only with DataGraph Events, so cast is safe
+                                    @Suppress("UNCHECKED_CAST")
+                                    val addEdgeEvent = oldEvent as AddEvent<EdgeInstance, EdgeInstanceDto>
+
+                                    val newProperties = addEdgeEvent.dto.properties.filter { (property) ->
+                                        !changeEvent.propertyChanges.propertyKeysToRemove.contains(property)// TODO check by key
+                                    }.union(changeEvent.propertyChanges.propertiesToAdd).toSet()
+
+                                    val newAddEdgeEvent = AddEvent<NodeInstance, NodeInstanceDto>(
+                                        elementKey = addEdgeEvent.elementKey,
+                                        elementForm = addEdgeEvent.elementForm,
+                                        dto = NodeInstanceDto(
+                                            id = addEdgeEvent.dto.id,
+                                            label = addEdgeEvent.dto.label,
+                                            properties = newProperties
+                                        )
+                                    )
+
+                                    optimizedEvents[it.elementKey] = newAddEdgeEvent
+                                }
+                                PROPERTY -> { } // TODO
+                            }
+
+                        }
                     }
                     is ChangeEvent -> optimizedEvents[it.elementKey] = it
                 }
+            } else {
+                optimizedEvents[it.elementKey] = it
             }
         }
     }
 
-
-    val atomicEvents
+    val events // Only atomic events
         get() = optimizedEvents.values.toList()
 
-    val addEvents = atomicEvents.filterIsInstance<AddEvent<*, *>>()
-    val removeEvents = atomicEvents.filterIsInstance<RemoveEvent>()
-    val changeEvents = atomicEvents.filterIsInstance<ChangeEvent>()
-    val reverseEdgeEvents = atomicEvents.filterIsInstance<ReverseEdgeEvent>()
+    val addEvents = events.filterIsInstance<AddEvent<*, *>>()
+    val removeEvents = events.filterIsInstance<RemoveEvent>()
+    val changeEvents = events.filterIsInstance<ChangeEvent>()
+    val reverseEdgeEvents = events.filterIsInstance<ReverseEdgeEvent>()
 
 }
 
 private fun getElementForm(element: OverallElement) =
     when (element) {
         is ElementClass -> when (element) {
-            is NodeClass -> ElementForm.NODE
-            is EdgeClass -> ElementForm.EDGE
-            is PropertyClass -> ElementForm.PROPERTY
+            is NodeClass -> NODE
+            is EdgeClass -> EDGE
+            is PropertyClass -> PROPERTY
             else -> throw IllegalArgumentException()
         }
-        is Node<*, *> -> ElementForm.NODE
-        is Edge<*, *> -> ElementForm.EDGE
+        is Node<*, *> -> NODE
+        is Edge<*, *> -> EDGE
         else -> throw IllegalArgumentException()
     }
 
@@ -195,13 +244,13 @@ data class ChangePropertyRelationEvent(
     val holderKey: String,
     val holderForm: ElementForm,
     override val customProperties: Map<String, Any?>,
-) : ChangeModelElementEvent(elementKey, ElementForm.PROPERTY, customProperties) {
-    override val elementForm: ElementForm = ElementForm.PROPERTY
+) : ChangeModelElementEvent(elementKey, PROPERTY, customProperties) {
+    override val elementForm: ElementForm = PROPERTY
 
     constructor(element: PropertyRelation, customProperties: Map<String, Any?> = mapOf()) : this(
         elementKey = element.key,
         holderKey = element.holderElementClass.key,
-        holderForm = if (element.holderElementClass is NodeClass) ElementForm.NODE else ElementForm.EDGE,
+        holderForm = if (element.holderElementClass is NodeClass) NODE else EDGE,
         customProperties = customProperties
     )
 }
@@ -226,7 +275,7 @@ data class ChangeDataElementEvent(
 }
 
 abstract class ReverseEdgeEvent : AtomicEvent {
-    override val elementForm = ElementForm.EDGE
+    override val elementForm = EDGE
 }
 
 class ReverseEdgeRelationEvent(override val elementKey: String) : ReverseEdgeEvent() {
@@ -250,7 +299,7 @@ data class PropertyChanges<X : PropertyDto>(
     val isEmpty get() = propertiesToAdd.isEmpty() && propertyKeysToRemove.isEmpty()
 }
 
-fun <T : AtomicEvent> List<T>.nodeEvents() = filter { it.elementForm == ElementForm.NODE }
-fun <T : AtomicEvent> List<T>.edgeEvents() = filter { it.elementForm == ElementForm.EDGE }
+fun <T : AtomicEvent> List<T>.nodeEvents() = filter { it.elementForm == NODE }
+fun <T : AtomicEvent> List<T>.edgeEvents() = filter { it.elementForm == EDGE }
 
 

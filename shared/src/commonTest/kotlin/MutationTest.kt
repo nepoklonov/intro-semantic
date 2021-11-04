@@ -1,5 +1,6 @@
 import elements.data.NodeInstance
 import elements.data.PropertyInstance
+import elements.schema.fundamental.EdgeClass
 import elements.schema.fundamental.NodeClass
 import elements.schema.fundamental.PropertyClass
 import elements.schema.model.ModelNode
@@ -26,6 +27,39 @@ class MutationTest {
         val schema = Schema(
             Fundamental(
                 nodeClasses = listOf(humanClass),
+                propertyClasses = listOf(ageClass)
+            ),
+            ModelGraph(
+                nodes = listOf(ModelNode(humanClass))
+            )
+        )
+
+        val age = PropertyInstance(humanAgeRelation, value = 21)
+        val human = NodeInstance(humanClass, properties = mutableKeySetOf(age))
+
+        val dataFrame = DataGraphFrame(DataGraph(schema))
+
+        dataFrame.addNode(human)
+        dataFrame.changeElement(human, propertiesToRemove = listOf(age))
+        dataFrame.removeNode(human)
+
+        val unoptimizedEvents = dataFrame.eventLine.events.map { it.originalEvent }
+        val mutation = Mutation(unoptimizedEvents)
+        assertTrue(mutation.events.isEmpty())
+    }
+    @Test
+    fun `adding, changing and removing edge`() {
+        val humanClass = NodeClass("Человек")
+        val ageClass = PropertyClass("Возраст", DataType.INTEGER)
+        val humanAgeRelation = PropertyRelation(ageClass, humanClass)
+        humanClass.properties += humanAgeRelation
+
+        val worksClass = EdgeClass("Работает")
+
+        val schema = Schema(
+            Fundamental(
+                nodeClasses = listOf(humanClass),
+                edgeClasses = listOf(worksClass),
                 propertyClasses = listOf(ageClass)
             ),
             ModelGraph(
