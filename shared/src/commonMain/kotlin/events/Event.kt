@@ -43,6 +43,7 @@ data class EventPair<O : Event, R : Event>(
 //TODO keep it optimized
 class Mutation(mixedEvents: List<Event>) {
     private val optimizedEvents = mutableMapOf<String, AtomicEvent>()
+    private val optimizedReverseEdgeEvents = mutableMapOf<String, AtomicEvent>()
 
     init {
         mixedEvents.mapNotNull {
@@ -52,70 +53,80 @@ class Mutation(mixedEvents: List<Event>) {
                 else -> null
             }
         }.flatten().forEach {
-            if (optimizedEvents.containsKey(it.elementKey)) {
-                when (val oldEvent = optimizedEvents[it.elementKey]) {
-                    is AddEvent<*, *> -> when (it) {
-                        is RemoveEvent -> optimizedEvents.remove(it.elementKey)
-                        is ChangeEvent -> {
-                            val changeEvent = it as ChangeDataElementEvent
-                            when (oldEvent.elementForm) {
-                                NODE -> {
-                                    // Mutation works only with DataGraph Events, so cast is safe
-                                    @Suppress("UNCHECKED_CAST")
-                                    val addNodeEvent = oldEvent as AddEvent<NodeInstance, NodeInstanceDto>
+            if (it is ReverseEdgeEvent && optimizedReverseEdgeEvents.containsKey(it.elementKey))
+                optimizedReverseEdgeEvents.remove(it.elementKey)
+            else if (it is ReverseEdgeEvent)
+                optimizedReverseEdgeEvents[it.elementKey] = it
+            else
+                if (optimizedEvents.containsKey(it.elementKey)) {
+                    when (val oldEvent = optimizedEvents[it.elementKey]) {
+                        is AddEvent<*, *> -> when (it) {
+                            is RemoveEvent -> optimizedEvents.remove(it.elementKey)
+                            is ChangeEvent -> {
+                                val changeEvent = it as ChangeDataElementEvent
+                                when (oldEvent.elementForm) {
+                                    NODE -> {
+                                        // Mutation works only with DataGraph Events, so cast is safe
+                                        @Suppress("UNCHECKED_CAST")
+                                        val addNodeEvent = oldEvent as AddEvent<NodeInstance, NodeInstanceDto>
 
-                                    val newProperties = addNodeEvent.dto.properties.filter { property ->
-                                        !changeEvent.propertyChanges.propertyKeysToRemove.contains(property.key)
-                                    }.union(changeEvent.propertyChanges.propertiesToAdd).toSet()
+                                        val newProperties = addNodeEvent.dto.properties.filter { property ->
+                                            !changeEvent.propertyChanges.propertyKeysToRemove.contains(property.key)
+                                        }.union(changeEvent.propertyChanges.propertiesToAdd).toSet()
 
-                                    val newAddNodeEvent = AddEvent<NodeInstance, NodeInstanceDto>(
-                                        elementKey = addNodeEvent.elementKey,
-                                        elementForm = addNodeEvent.elementForm,
-                                        dto = NodeInstanceDto(
-                                            id = addNodeEvent.dto.id,
-                                            label = addNodeEvent.dto.label,
-                                            properties = newProperties
+                                        val newAddNodeEvent = AddEvent<NodeInstance, NodeInstanceDto>(
+                                            elementKey = addNodeEvent.elementKey,
+                                            elementForm = addNodeEvent.elementForm,
+                                            dto = NodeInstanceDto(
+                                                id = addNodeEvent.dto.id,
+                                                label = addNodeEvent.dto.label,
+                                                properties = newProperties
+                                            )
                                         )
-                                    )
 
-                                    optimizedEvents[it.elementKey] = newAddNodeEvent
-                                }
-                                EDGE -> {
-                                    // Mutation works only with DataGraph Events, so cast is safe
-                                    @Suppress("UNCHECKED_CAST")
-                                    val addEdgeEvent = oldEvent as AddEvent<EdgeInstance, EdgeInstanceDto>
+                                        optimizedEvents[it.elementKey] = newAddNodeEvent
+                                    }
+                                    EDGE -> {
+                                        // Mutation works only with DataGraph Events, so cast is safe
+                                        @Suppress("UNCHECKED_CAST")
+                                        val addEdgeEvent = oldEvent as AddEvent<EdgeInstance, EdgeInstanceDto>
 
-                                    val newProperties = addEdgeEvent.dto.properties.filter { property ->
-                                        !changeEvent.propertyChanges.propertyKeysToRemove.contains(property.key)
-                                    }.union(changeEvent.propertyChanges.propertiesToAdd).toSet()
+                                        val newProperties = addEdgeEvent.dto.properties.filter { property ->
+                                            !changeEvent.propertyChanges.propertyKeysToRemove.contains(property.key)
+                                        }.union(changeEvent.propertyChanges.propertiesToAdd).toSet()
 
-                                    val newAddEdgeEvent = AddEvent<NodeInstance, NodeInstanceDto>(
-                                        elementKey = addEdgeEvent.elementKey,
-                                        elementForm = addEdgeEvent.elementForm,
-                                        dto = NodeInstanceDto(
-                                            id = addEdgeEvent.dto.id,
-                                            label = addEdgeEvent.dto.label,
-                                            properties = newProperties
+                                        val newAddEdgeEvent = AddEvent<NodeInstance, NodeInstanceDto>(
+                                            elementKey = addEdgeEvent.elementKey,
+                                            elementForm = addEdgeEvent.elementForm,
+                                            dto = NodeInstanceDto(
+                                                id = addEdgeEvent.dto.id,
+                                                label = addEdgeEvent.dto.label,
+                                                properties = newProperties
+                                            )
                                         )
-                                    )
 
-                                    optimizedEvents[it.elementKey] = newAddEdgeEvent
+                                        optimizedEvents[it.elementKey] = newAddEdgeEvent
+                                    }
+                                    PROPERTY -> {
+                                    } // TODO
                                 }
-                                PROPERTY -> { } // TODO
+
                             }
-
                         }
+                        is ChangeEvent -> when (it) {
+                            is ChangeEvent -> optimizedEvents[it.elementKey] = it // todo
+                            is RemoveEvent -> optimizedEvents[it.elementKey] = it
+                        }
+                        // oldEvent can't be RemoveEvent
                     }
-                    is ChangeEvent -> optimizedEvents[it.elementKey] = it
+                } else {
+                    optimizedEvents[it.elementKey] = it
                 }
-            } else {
-                optimizedEvents[it.elementKey] = it
-            }
         }
     }
 
     val events // Only atomic events
-        get() = optimizedEvents.values.toList()
+        get() = optimizedEvents.values.toList() + optimizedReverseEdgeEvents.values.toList()
 
     val addEvents = events.filterIsInstance<AddEvent<*, *>>()
     val removeEvents = events.filterIsInstance<RemoveEvent>()
