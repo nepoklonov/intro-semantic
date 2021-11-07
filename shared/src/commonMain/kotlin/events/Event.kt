@@ -14,7 +14,6 @@ import elements.schema.model.EdgeRelation
 import elements.schema.model.ModelNode
 import elements.schema.model.PropertyRelation
 import events.ElementForm.*
-import kotlinx.serialization.Serializable
 
 interface Event
 
@@ -42,8 +41,7 @@ data class EventPair<O : Event, R : Event>(
 
 //TODO keep it optimized
 class Mutation(mixedEvents: List<Event>) {
-    private val optimizedEvents = mutableMapOf<String, AtomicEvent>()
-    private val optimizedReverseEdgeEvents = mutableMapOf<String, AtomicEvent>()
+    private val optimizedEvents = mutableMapOf<String, Event>()
 
     init {
         mixedEvents.mapNotNull {
@@ -53,80 +51,103 @@ class Mutation(mixedEvents: List<Event>) {
                 else -> null
             }
         }.flatten().forEach {
-            if (it is ReverseEdgeEvent && optimizedReverseEdgeEvents.containsKey(it.elementKey))
-                optimizedReverseEdgeEvents.remove(it.elementKey)
-            else if (it is ReverseEdgeEvent)
-                optimizedReverseEdgeEvents[it.elementKey] = it
-            else
-                if (optimizedEvents.containsKey(it.elementKey)) {
-                    when (val oldEvent = optimizedEvents[it.elementKey]) {
-                        is AddEvent<*, *> -> when (it) {
-                            is RemoveEvent -> optimizedEvents.remove(it.elementKey)
-                            is ChangeEvent -> {
-                                val changeEvent = it as ChangeDataElementEvent
-                                when (oldEvent.elementForm) {
-                                    NODE -> {
-                                        // Mutation works only with DataGraph Events, so cast is safe
-                                        @Suppress("UNCHECKED_CAST")
-                                        val addNodeEvent = oldEvent as AddEvent<NodeInstance, NodeInstanceDto>
+            if (optimizedEvents.containsKey(it.elementKey)) {
+                when (val oldEvent = optimizedEvents[it.elementKey]) {
+                    is CompositeEvent -> when (it) {
+                        is ChangeDataElementEvent -> {
+                            val newEventPair =
+                                oldEvent.atomicEvents.first { event -> event is ChangeDataElementEvent } as ChangeDataElementEvent to
+                                        oldEvent.atomicEvents.first { event -> event is ReverseEdgeEvent } as ReverseEdgeEvent
+                            newEventPair.first.propertyChanges.propertiesToAdd.union(it.propertyChanges.propertiesToAdd)
+                            newEventPair.first.propertyChanges.propertyKeysToRemove.union(it.propertyChanges.propertyKeysToRemove)
 
-                                        val newProperties = addNodeEvent.dto.properties.filter { property ->
-                                            !changeEvent.propertyChanges.propertyKeysToRemove.contains(property.key)
-                                        }.union(changeEvent.propertyChanges.propertiesToAdd).toSet()
+                            optimizedEvents[it.elementKey] = CompositeEvent(newEventPair.toList())
+                        }
+                        is ReverseEdgeEvent ->
+                            optimizedEvents[it.elementKey] =
+                                oldEvent.atomicEvents.first { event -> event is ChangeDataElementEvent }
+                        is RemoveEvent -> optimizedEvents.remove(it.elementKey)
+                    }
+                    is AddEvent<*, *> -> when (it) {
+                        is ChangeDataElementEvent -> {
+                            when (oldEvent.dto) {
+                                is NodeInstanceDto -> {
+                                    val newProperties = oldEvent.dto.properties.filter { property ->
+                                        !it.propertyChanges.propertyKeysToRemove.contains(property.key)
+                                    }.union(it.propertyChanges.propertiesToAdd).toSet()
 
-                                        val newAddNodeEvent = AddEvent<NodeInstance, NodeInstanceDto>(
-                                            elementKey = addNodeEvent.elementKey,
-                                            elementForm = addNodeEvent.elementForm,
-                                            dto = NodeInstanceDto(
-                                                id = addNodeEvent.dto.id,
-                                                label = addNodeEvent.dto.label,
-                                                properties = newProperties
-                                            )
+                                    optimizedEvents[it.elementKey] = AddEvent<NodeInstance, NodeInstanceDto>(
+                                        elementKey = oldEvent.elementKey,
+                                        elementForm = oldEvent.elementForm,
+                                        dto = NodeInstanceDto(
+                                            id = oldEvent.dto.id,
+                                            label = oldEvent.dto.label,
+                                            properties = newProperties
                                         )
-
-                                        optimizedEvents[it.elementKey] = newAddNodeEvent
-                                    }
-                                    EDGE -> {
-                                        // Mutation works only with DataGraph Events, so cast is safe
-                                        @Suppress("UNCHECKED_CAST")
-                                        val addEdgeEvent = oldEvent as AddEvent<EdgeInstance, EdgeInstanceDto>
-
-                                        val newProperties = addEdgeEvent.dto.properties.filter { property ->
-                                            !changeEvent.propertyChanges.propertyKeysToRemove.contains(property.key)
-                                        }.union(changeEvent.propertyChanges.propertiesToAdd).toSet()
-
-                                        val newAddEdgeEvent = AddEvent<NodeInstance, NodeInstanceDto>(
-                                            elementKey = addEdgeEvent.elementKey,
-                                            elementForm = addEdgeEvent.elementForm,
-                                            dto = NodeInstanceDto(
-                                                id = addEdgeEvent.dto.id,
-                                                label = addEdgeEvent.dto.label,
-                                                properties = newProperties
-                                            )
-                                        )
-
-                                        optimizedEvents[it.elementKey] = newAddEdgeEvent
-                                    }
-                                    PROPERTY -> {
-                                    } // TODO
+                                    )
                                 }
+                                is EdgeInstanceDto -> {
+                                    val newProperties = oldEvent.dto.properties.filter { property ->
+                                        !it.propertyChanges.propertyKeysToRemove.contains(property.key)
+                                    }.union(it.propertyChanges.propertiesToAdd).toSet()
 
+                                    optimizedEvents[it.elementKey] = AddEvent<EdgeInstance, EdgeInstanceDto>(
+                                        elementKey = oldEvent.elementKey,
+                                        elementForm = oldEvent.elementForm,
+                                        dto = EdgeInstanceDto(
+                                            id = oldEvent.dto.id,
+                                            label = oldEvent.dto.label,
+                                            properties = newProperties,
+                                            source = oldEvent.dto.source,
+                                            target = oldEvent.dto.target
+                                        )
+                                    )
+                                }
                             }
                         }
-                        is ChangeEvent -> when (it) {
-                            is ChangeEvent -> optimizedEvents[it.elementKey] = it // todo
-                            is RemoveEvent -> optimizedEvents[it.elementKey] = it
-                        }
-                        // oldEvent can't be RemoveEvent
+                        is ReverseEdgeEvent -> if (oldEvent.dto is EdgeInstanceDto) {
+                                optimizedEvents[it.elementKey] = AddEvent<EdgeInstance, EdgeInstanceDto>(
+                                    elementKey = oldEvent.elementKey,
+                                    elementForm = oldEvent.elementForm,
+                                    dto = EdgeInstanceDto(
+                                        id = oldEvent.dto.id,
+                                        label = oldEvent.dto.label,
+                                        properties = oldEvent.dto.properties,
+                                        source = oldEvent.dto.target,
+                                        target = oldEvent.dto.source
+                                    )
+                                )
+                            }
+                        is RemoveEvent -> optimizedEvents.remove(it.elementKey)
                     }
-                } else {
-                    optimizedEvents[it.elementKey] = it
+                    is ChangeDataElementEvent -> when (it) {
+                        is ChangeDataElementEvent -> {
+                            oldEvent.propertyChanges.propertiesToAdd.union(it.propertyChanges.propertiesToAdd)
+                            oldEvent.propertyChanges.propertyKeysToRemove.union(it.propertyChanges.propertyKeysToRemove)
+                        }
+                        is ReverseEdgeEvent -> optimizedEvents[it.elementKey] = CompositeEvent(listOf(oldEvent, it))
+                        is RemoveEvent -> optimizedEvents[it.elementKey] = it
+                    }
+                    is ReverseEdgeEvent -> when (it) {
+                        is ChangeDataElementEvent -> optimizedEvents[it.elementKey] = CompositeEvent(listOf(it, oldEvent))
+                        is ReverseEdgeEvent -> optimizedEvents.remove(it.elementKey)
+                        is RemoveEvent -> optimizedEvents[it.elementKey] = it
+                    }
                 }
+            } else {
+                optimizedEvents[it.elementKey] = it
+            }
         }
     }
 
     val events // Only atomic events
-        get() = optimizedEvents.values.toList() + optimizedReverseEdgeEvents.values.toList()
+        get() = optimizedEvents.values.toList().mapNotNull {
+            when (it) {
+                is CompositeEvent -> it.atomicEvents
+                is AtomicEvent -> listOf(it)
+                else -> null
+            }
+        }.flatten()
 
     val addEvents = events.filterIsInstance<AddEvent<*, *>>()
     val removeEvents = events.filterIsInstance<RemoveEvent>()
