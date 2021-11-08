@@ -63,10 +63,34 @@ class Mutation(mixedEvents: List<Event>) {
                             val newEventPair =
                                 oldEvent.atomicEvents.first { event -> event is ChangeDataElementEvent } as ChangeDataElementEvent to
                                         oldEvent.atomicEvents.first { event -> event is ReverseEdgeEvent } as ReverseEdgeEvent
-                            newEventPair.first.propertyChanges.propertiesToAdd.union(it.propertyChanges.propertiesToAdd)
-                            newEventPair.first.propertyChanges.propertyKeysToRemove.union(it.propertyChanges.propertyKeysToRemove)
 
-                            optimizedEvents[it.elementKey] = CompositeEvent(newEventPair.toList())
+                            val newPropertiesToAdd =
+                                newEventPair.first.propertyChanges.propertiesToAdd.filter { propertyInstanceDto ->
+                                    !it.propertyChanges.propertyKeysToRemove.contains(propertyInstanceDto.key)
+                                }.union(it.propertyChanges.propertiesToAdd.filter { propertyInstanceDto ->
+                                    !it.propertyChanges.propertyKeysToRemove.contains(propertyInstanceDto.key)
+                                })
+
+                            val propertiesLeftToRemove =
+                                it.propertyChanges.propertyKeysToRemove.union(newEventPair.first.propertyChanges.propertyKeysToRemove) -
+                                        newPropertiesToAdd.map { propertyInstanceDto -> propertyInstanceDto.key }
+                                            .toSet()
+
+                            val newChangeDataElementEvent = ChangeDataElementEvent(
+                                elementKey = newEventPair.first.elementKey,
+                                elementForm = newEventPair.first.elementForm,
+                                propertyChanges = PropertyChanges(
+                                    propertiesToAdd = newPropertiesToAdd.toList(),
+                                    propertyKeysToRemove = propertiesLeftToRemove.toList()
+                                )
+                            )
+
+                            if (!newChangeDataElementEvent.propertyChanges.isEmpty) {
+                                optimizedEvents[it.elementKey] =
+                                    CompositeEvent(listOf(newChangeDataElementEvent, newEventPair.second))
+                            } else {
+                                optimizedEvents[it.elementKey] = newEventPair.second
+                            }
                         }
                         is ReverseEdgeEvent ->
                             optimizedEvents[it.elementKey] =
@@ -111,39 +135,44 @@ class Mutation(mixedEvents: List<Event>) {
                             }
                         }
                         is ReverseEdgeEvent -> if (oldEvent.dto is EdgeInstanceDto) {
-                                optimizedEvents[it.elementKey] = AddEvent<EdgeInstance, EdgeInstanceDto>(
-                                    elementKey = oldEvent.elementKey,
-                                    elementForm = oldEvent.elementForm,
-                                    dto = EdgeInstanceDto(
-                                        id = oldEvent.dto.id,
-                                        label = oldEvent.dto.label,
-                                        properties = oldEvent.dto.properties,
-                                        source = oldEvent.dto.target,
-                                        target = oldEvent.dto.source
-                                    )
+                            optimizedEvents[it.elementKey] = AddEvent<EdgeInstance, EdgeInstanceDto>(
+                                elementKey = oldEvent.elementKey,
+                                elementForm = oldEvent.elementForm,
+                                dto = EdgeInstanceDto(
+                                    id = oldEvent.dto.id,
+                                    label = oldEvent.dto.label,
+                                    properties = oldEvent.dto.properties,
+                                    source = oldEvent.dto.target,
+                                    target = oldEvent.dto.source
                                 )
-                            }
+                            )
+                        }
                         is RemoveEvent -> optimizedEvents.remove(it.elementKey)
                     }
                     is ChangeDataElementEvent -> when (it) {
                         is ChangeDataElementEvent -> {
-                            val newPropertiesToAdd = oldEvent.propertyChanges.propertiesToAdd.filter { propertyInstanceDto ->
-                                !it.propertyChanges.propertyKeysToRemove.contains(propertyInstanceDto.key)
-                            }.union(it.propertyChanges.propertiesToAdd.filter { propertyInstanceDto ->
-                                !it.propertyChanges.propertyKeysToRemove.contains(propertyInstanceDto.key)
-                            })
+                            val newPropertiesToAdd =
+                                oldEvent.propertyChanges.propertiesToAdd.filter { propertyInstanceDto ->
+                                    !it.propertyChanges.propertyKeysToRemove.contains(propertyInstanceDto.key)
+                                }.union(it.propertyChanges.propertiesToAdd.filter { propertyInstanceDto ->
+                                    !it.propertyChanges.propertyKeysToRemove.contains(propertyInstanceDto.key)
+                                })
 
-                            val propertiesLeftToRemove = it.propertyChanges.propertyKeysToRemove.union(oldEvent.propertyChanges.propertyKeysToRemove) -
-                                    newPropertiesToAdd.map { propertyInstanceDto -> propertyInstanceDto.key }.toSet()
+                            val propertiesLeftToRemove =
+                                it.propertyChanges.propertyKeysToRemove.union(oldEvent.propertyChanges.propertyKeysToRemove) -
+                                        newPropertiesToAdd.map { propertyInstanceDto -> propertyInstanceDto.key }
+                                            .toSet()
 
                             val newChangeDataElementEvent = ChangeDataElementEvent(
                                 elementKey = oldEvent.elementKey,
                                 elementForm = oldEvent.elementForm,
                                 propertyChanges = PropertyChanges(
                                     propertiesToAdd = newPropertiesToAdd.toList(),
-                                    propertyKeysToRemove = propertiesLeftToRemove.toList()))
+                                    propertyKeysToRemove = propertiesLeftToRemove.toList()
+                                )
+                            )
 
-                            if (!newChangeDataElementEvent.propertyChanges.isEmpty){
+                            if (!newChangeDataElementEvent.propertyChanges.isEmpty) {
                                 optimizedEvents[it.elementKey] = newChangeDataElementEvent
                             } else {
                                 optimizedEvents.remove(it.elementKey)
@@ -153,7 +182,8 @@ class Mutation(mixedEvents: List<Event>) {
                         is RemoveEvent -> optimizedEvents[it.elementKey] = it
                     }
                     is ReverseEdgeEvent -> when (it) {
-                        is ChangeDataElementEvent -> optimizedEvents[it.elementKey] = CompositeEvent(listOf(it, oldEvent))
+                        is ChangeDataElementEvent -> optimizedEvents[it.elementKey] =
+                            CompositeEvent(listOf(it, oldEvent))
                         is ReverseEdgeEvent -> optimizedEvents.remove(it.elementKey)
                         is RemoveEvent -> optimizedEvents[it.elementKey] = it
                     }
