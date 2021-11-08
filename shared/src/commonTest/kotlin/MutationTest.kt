@@ -135,8 +135,10 @@ class MutationTest {
          * AddEvent (worksB, properties = awardedB, target = human, source = companyB)
          *
          * Test cases:
-         * addEvent -> ... -- passed
-         * changeEvent -> removeEvent*/
+         * addEvent         -> ... -- passed
+         * changeEvent      -> ... -- passed
+         * compositeEvent   -> ... -- passed
+         * reverseEdgeEvent -> ... -- passed */
 
         val unoptimizedEvents1 = dataFrame.eventLine.events.map { it.originalEvent }
         val mutation1 = Mutation(unoptimizedEvents1)
@@ -268,6 +270,53 @@ class MutationTest {
         assertTrue { // WorksB is reversed -- passed
             val reverseEdgeEvent = mutation4.reverseEdgeEvents[0]
             reverseEdgeEvent.elementKey == worksB.key
+        }
+
+        dataFrame.reverseEdge(worksB)
+
+        val unoptimizedEvents5 = dataFrame.eventLine.events.takeLast(4).map { it.originalEvent }
+        val mutation5 = Mutation(unoptimizedEvents5)
+
+        /*
+        * Should leave:
+        * ChangeEvent (worksB, propertiesToRemove = listOf(startedB), propertiesToAdd = listOf(awardedB)) */
+
+        assertTrue(mutation5.events.size == 1)
+        assertTrue(mutation5.changeEvents.size == 1)
+        assertTrue(mutation5.addEvents.isEmpty())
+        assertTrue(mutation5.removeEvents.isEmpty())
+        assertTrue(mutation5.reverseEdgeEvents.isEmpty())
+
+        assertTrue { // WorksB removes age property and adds experience -- passed
+            val changeDataElementEvent = mutation5.changeEvents[0] as ChangeDataElementEvent
+            changeDataElementEvent.propertyChanges.propertyKeysToRemove.contains(startedB.key) &&
+                    changeDataElementEvent.propertyChanges.propertiesToAdd.contains(awardedB.convert())
+        }
+
+        dataFrame.removeNode(companyB)
+
+        val unoptimizedEvents6 = dataFrame.eventLine.events.takeLast(4).map { it.originalEvent }
+        val mutation6 = Mutation(unoptimizedEvents6)
+
+        /*
+        * Should leave:
+        * RemoveEvent (companyB)
+        * RemoveEvent (worksB) */
+
+        assertTrue(mutation6.events.size == 2)
+        assertTrue(mutation6.changeEvents.isEmpty())
+        assertTrue(mutation6.addEvents.isEmpty())
+        assertTrue(mutation6.removeEvents.size == 2)
+        assertTrue(mutation6.reverseEdgeEvents.isEmpty())
+
+        assertTrue { // Remove worksB -- passed
+            val removeEvent = mutation6.removeEvents[0] as RemoveDataElementEvent
+            removeEvent.elementKey == worksB.key
+        }
+
+        assertTrue { // Remove companyB -- passed
+            val removeEvent = mutation6.removeEvents[1] as RemoveDataElementEvent
+            removeEvent.elementKey == companyB.key
         }
 
     }
