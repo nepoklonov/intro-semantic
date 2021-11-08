@@ -95,7 +95,7 @@ class Mutation(mixedEvents: List<Event>) {
                         is ReverseEdgeEvent ->
                             optimizedEvents[it.elementKey] =
                                 oldEvent.atomicEvents.first { event -> event is ChangeDataElementEvent }
-                        is RemoveEvent -> optimizedEvents.remove(it.elementKey)
+                        is RemoveEvent -> optimizedEvents[it.elementKey] = it
                     }
                     is AddEvent<*, *> -> when (it) {
                         is ChangeDataElementEvent -> {
