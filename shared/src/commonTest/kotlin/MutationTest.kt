@@ -56,7 +56,7 @@ class MutationTest {
     fun complexTest() {
         val humanClass = NodeClass("Человек")
         val ageClass = PropertyClass("Возраст", DataType.INTEGER)
-        val experienceClass = PropertyClass("Возраст", DataType.INTEGER)
+        val experienceClass = PropertyClass("Опыт", DataType.INTEGER)
         val humanAgeRelation = PropertyRelation(ageClass, humanClass)
         val humanExperienceRelation = PropertyRelation(experienceClass, humanClass)
         humanClass.properties += humanAgeRelation
@@ -94,7 +94,7 @@ class MutationTest {
         )
 
         val age = PropertyInstance(humanAgeRelation, value = 21)
-        val experience = PropertyInstance(humanAgeRelation, value = 5)
+        val experience = PropertyInstance(humanExperienceRelation, value = 5)
         val human = NodeInstance(humanClass, properties = mutableKeySetOf(age))
 
         val foundedA = PropertyInstance(companyFoundedRelation, value = 1999)
